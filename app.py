@@ -1,88 +1,114 @@
 import streamlit as st
+import sqlite3
 from datetime import datetime
 
-# --- CONFIGURACIÓN DE LA PÁGINA ---
-st.set_page_config(page_title="Conexión Segura", page_icon="🚐", layout="centered")
+# --- CONFIGURACIÓN DE DATOS REGIONALES ---
+DEPARTAMENTOS_COSTA = {
+    "Atlántico": ["Barranquilla", "Sabanalarga", "Soledad", "Baranoa", "Puerto Colombia", "Luruaco", "Galapa"],
+    "Bolívar": ["Cartagena", "Magangué", "Turbaco", "Arjona", "El Carmen de Bolívar"],
+    "Magdalena": ["Santa Marta", "Ciénaga", "Fundación", "Plato", "El Banco"],
+    "Cesar": ["Valledupar", "Aguachica", "Agustín Codazzi", "Bosconia"],
+    "Córdoba": ["Montería", "Cereté", "Sahagún", "Lorica", "Montelíbano"],
+    "Sucre": ["Sincelejo", "Corozal", "San Marcos", "Tolú", "Coveñas"],
+    "La Guajira": ["Riohacha", "Maicao", "Uribia", "Manaure", "San Juan del Cesar"]
+}
 
-# Variables de sesión para que la web "recuerde" si hay un chat activo
-if "chat_activo" not in st.session_state:
-    st.session_state.chat_activo = False
-if "mensajes" not in st.session_state:
-    st.session_state.mensajes = []
+# --- ESTADO DE LA SESIÓN ---
+if 'user' not in st.session_state:
+    st.session_state.user = None
+if 'rutas_activas' not in st.session_state:
+    st.session_state.rutas_activas = []
 
-st.title("🚐 Conexión Segura: Sabanalarga - Barranquilla")
-st.write("Tu plataforma de confianza con perfiles verificados.")
+# --- FUNCIONES DE LÓGICA ---
+def calcular_precio(dep_ori, dep_des):
+    return "$15.000 - $25.000" if dep_ori == dep_des else "$45.000 - $75.000"
 
-# --- NAVEGACIÓN POR PESTAÑAS ---
-tab_inicio, tab_buscar, tab_chat, tab_ayuda = st.tabs(["🏠 Inicio", "🔍 Buscar", "💬 Chat Activo", "❓ Ayuda"])
+# --- INTERFAZ ---
+st.set_page_config(page_title="Caribe Seguro PRO", layout="wide", page_icon="🛡️")
 
-# --- 1. PESTAÑA DE INICIO ---
-with tab_inicio:
-    st.header("Bienvenido a la red de transporte seguro")
-    st.info("💡 **Regla de oro:** Todos los usuarios en esta plataforma deben subir una foto real en el momento de registrarse. Si no hay foto, no hay viaje.")
+# --- ESTILOS ---
+st.markdown("""
+    <style>
+    .stButton>button { width: 100%; border-radius: 10px; height: 3em; }
+    .sos-button { background-color: #ff4b4b !important; color: white !important; font-weight: bold; }
+    </style>
+    """, unsafe_allow_html=True)
+
+if st.session_state.user is None:
+    t_log, t_reg = st.tabs(["🔑 Ingresar", "📝 Registro"])
     
-    st.subheader("📸 Tu Perfil")
-    nombre = st.text_input("Ingresa tu nombre para empezar:")
-    foto = st.camera_input("Tómate una foto para identificarte")
-    if foto and nombre:
-        st.success(f"Perfil verificado, {nombre}. ¡Ya puedes buscar tu conexión!")
-
-# --- 2. PESTAÑA DE BÚSQUEDA ---
-with tab_buscar:
-    st.header("🔍 Encuentra tu viaje")
-    col1, col2 = st.columns(2)
-    with col1:
-        fecha = st.date_input("Fecha del viaje", datetime.now())
-    with col2:
-        hora = st.time_input("Hora aproximada", datetime.now())
-    
-    st.divider()
-    st.write("### Prestadores disponibles:")
-    
-    # Simulamos un prestador verificado
-    c1, c2 = st.columns([1, 3])
-    with c1:
-        st.write("👤 (Foto Verificada)")
-    with c2:
-        st.write("**Carlos M.** - Conductor habitual")
-        st.write(f"Disponible hoy cerca de las {hora}")
-        if st.button("Reservar y Contactar a Carlos"):
-            st.session_state.chat_activo = True
-            st.session_state.mensajes = [{"rol": "Carlos (Prestador)", "texto": "¡Hola! Vi tu reserva. ¿En qué parte exacta de Sabanalarga te recojo?"}]
-            st.success("¡Reserva confirmada! Ve a la pestaña de 'Chat Activo' para coordinar.")
-
-# --- 3. PESTAÑA DE CHAT INTERACTIVO ---
-with tab_chat:
-    st.header("💬 Coordinación del Servicio")
-    
-    if st.session_state.chat_activo:
-        st.write("Estás chateando en un entorno seguro. **No compartas contraseñas ni datos bancarios.**")
-        st.divider()
+    with t_reg:
+        st.header("Registro de Identidad Caribe")
+        c1, c2 = st.columns(2)
+        with c1:
+            nom = st.text_input("Nombre Completo")
+            ced = st.text_input("Cédula")
+            pw = st.text_input("Contraseña", type="password")
+            rol = st.radio("¿Qué eres?", ["Cliente", "Prestador"])
+        with c2:
+            veh = st.text_input("Vehículo (Marca/Modelo/Color)")
+            pla = st.text_input("Placa")
+            foto = st.camera_input("Foto de Perfil")
         
-        # Mostrar el historial de mensajes
-        for msg in st.session_state.mensajes:
-            with st.chat_message("user" if msg["rol"] == "Tú" else "assistant"):
-                st.write(f"**{msg['rol']}:** {msg['texto']}")
-        
-        # Caja para escribir un nuevo mensaje
-        nuevo_mensaje = st.chat_input("Escribe tu mensaje aquí...")
-        if nuevo_mensaje:
-            # Guardar y mostrar el mensaje del usuario
-            st.session_state.mensajes.append({"rol": "Tú", "texto": nuevo_mensaje})
-            st.rerun() # Recarga la pantalla para mostrar el mensaje
-            
+        if st.button("Crear mi Cuenta Segura"):
+            if nom and ced and foto:
+                st.session_state.user = {"nom": nom, "ced": ced, "rol": rol, "veh": veh, "pla": pla, "foto": foto}
+                st.success("¡Cuenta creada! Bienvenido.")
+                st.rerun()
+
+else:
+    u = st.session_state.user
+    st.sidebar.image(u["foto"], caption=f"{u['nom']} ({u['rol']})")
+    
+    # --- BOTÓN DE PÁNICO (S.O.S) ---
+    if st.sidebar.button("🚨 BOTÓN DE PÁNICO S.O.S", key="sos", help="Enviar alerta inmediata"):
+        st.sidebar.error("⚠️ ALERTA ENVIADA: Ubicación compartida con Central y Contactos de Emergencia.")
+        st.sidebar.write(f"Datos reportados: Vehículo {u['veh']} - Placa {u['pla']}")
+    
+    if st.sidebar.button("Cerrar Sesión"):
+        st.session_state.user = None
+        st.rerun()
+
+    st.title("📍 Sistema de Rutas y Seguridad")
+
+    if u["rol"] == "Prestador":
+        st.subheader("Publicar una nueva Ruta")
+        with st.form("nueva_ruta"):
+            d_o = st.selectbox("Departamento Origen", list(DEPARTAMENTOS_COSTA.keys()))
+            m_o = st.selectbox("Municipio Origen", DEPARTAMENTOS_COSTA[d_o])
+            d_d = st.selectbox("Departamento Destino", list(DEPARTAMENTOS_COSTA.keys()))
+            m_d = st.selectbox("Municipio Destino", DEPARTAMENTOS_COSTA[d_d])
+            cupos = st.number_input("Cupos disponibles", 1, 15, 4)
+            hora = st.time_input("Hora de salida")
+            if st.form_submit_button("Publicar Ruta Regional"):
+                nueva = {
+                    "id": len(st.session_state.rutas_activas),
+                    "cond": u["nom"], "veh": u["veh"], "pla": u["pla"],
+                    "ori": m_o, "des": m_d, "cupos": cupos, "hora": str(hora),
+                    "precio": calcular_precio(d_o, d_d)
+                }
+                st.session_state.rutas_activas.append(nueva)
+                st.success(f"Ruta publicada: {m_o} a {m_d}")
+
     else:
-        st.warning("Aún no tienes ninguna reserva activa. Ve a la pestaña 'Buscar' para conectar con un prestador y abrir un chat.")
-
-# --- 4. PESTAÑA DE AYUDA / SOPORTE ---
-with tab_ayuda:
-    st.header("❓ Centro de Ayuda")
-    
-    with st.expander("¿Cómo funciona la verificación por foto?"):
-        st.write("Para garantizar la seguridad en la ruta Sabanalarga-Barranquilla, nuestra plataforma exige que tanto el cliente como el prestador se tomen una foto en tiempo real. Esta foto será visible para ambas partes al confirmar el viaje.")
+        st.subheader("🔍 Buscar Transporte Disponible")
+        if not st.session_state.rutas_activas:
+            st.info("No hay rutas publicadas en este momento. Intenta más tarde.")
         
-    with st.expander("¿Qué pasa si el prestador cancela?"):
-        st.write("Si el prestador cancela, el sistema te notificará inmediatamente y te mostrará opciones alternativas disponibles en tu mismo rango de hora.")
-        
-    with st.expander("Tengo un problema urgente"):
-        st.write("Si necesitas asistencia inmediata, escríbenos a **soporte@conexionsabanalarga.com** o presiona el botón de pánico en la app (Próximamente).")
+        for idx, r in enumerate(st.session_state.rutas_activas):
+            if r["cupos"] > 0:
+                with st.container():
+                    st.write("---")
+                    c_info, c_res = st.columns([3, 1])
+                    with c_info:
+                        st.write(f"🚗 **{r['cond']}** | {r['veh']} (Placa: {r['pla']})")
+                        st.write(f"📍 **Trayecto:** {r['ori']} ➔ {r['des']}")
+                        st.write(f"⏰ **Salida:** {r['hora']} | 💰 **Precio Sugerido:** {r['precio']}")
+                        st.write(f"👥 **Cupos restantes:** {r['cupos']}")
+                    with c_res:
+                        if st.button(f"Reservar Cupo", key=f"res_{idx}"):
+                            st.session_state.rutas_activas[idx]["cupos"] -= 1
+                            st.balloons()
+                            st.success("¡Reserva confirmada! Contacta al conductor.")
+            else:
+                st.write(f"🚫 Ruta de {r['cond']} (Lleno)")
