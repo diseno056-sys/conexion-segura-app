@@ -13,9 +13,11 @@ def conectar_db():
 def init_db():
     conn = conectar_db()
     c = conn.cursor()
+    # Tabla Usuarios: 9 columnas (tel, nom, pw, eme, rol, veh_tipo, veh_desc, pla, foto)
     c.execute('''CREATE TABLE IF NOT EXISTS usuarios 
                  (tel TEXT PRIMARY KEY, nom TEXT, pw TEXT, eme TEXT, rol TEXT, 
                   veh_tipo TEXT, veh_desc TEXT, pla TEXT, foto BLOB)''')
+    # Tabla Rutas: 10 columnas (id, tel_p, cond, veh_tipo, veh_desc, pla, ori, des, hora, cupos, precio)
     c.execute('''CREATE TABLE IF NOT EXISTS rutas 
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, tel_p TEXT, cond TEXT, 
                   veh_tipo TEXT, veh_desc TEXT, pla TEXT, ori TEXT, des TEXT, 
@@ -25,7 +27,7 @@ def init_db():
 
 init_db()
 
-# --- DICCIONARIO DE CIUDADES COSTA ---
+# --- CIUDADES COSTA ---
 DEPARTAMENTOS_COSTA = {
     "Atlántico": ["Barranquilla", "Sabanalarga", "Soledad", "Baranoa", "Luruaco"],
     "Bolívar": ["Cartagena", "Magangué", "Turbaco", "Arjona", "El Carmen"],
@@ -40,28 +42,16 @@ DEPARTAMENTOS_COSTA = {
 if 'user' not in st.session_state: st.session_state.user = None
 if 'pagina' not in st.session_state: st.session_state.pagina = "Bienvenida"
 
-# --- 1. PANTALLA DE BIENVENIDA ---
 if st.session_state.pagina == "Bienvenida":
     st.title("🛡️ Caribe Seguro Network")
-    st.subheader("Transporte Confiable y Verificado por la Costa")
     col1, col2 = st.columns(2)
     with col1:
         if st.button("🔑 INICIAR SESIÓN", use_container_width=True): st.session_state.pagina = "Login"; st.rerun()
     with col2:
         if st.button("📝 REGISTRARME", use_container_width=True): st.session_state.pagina = "Registro"; st.rerun()
-    
-    st.divider()
-    c_l1, c_l2 = st.columns(2)
-    with c_l1:
-        with st.expander("📄 Términos y Condiciones"):
-            st.write("Seguridad garantizada mediante validación de identidad.")
-    with c_l2:
-        with st.expander("📖 Manual"):
-            st.write("Publica o busca rutas seguras en minutos.")
 
-# --- 2. LOGIN ---
 elif st.session_state.pagina == "Login":
-    st.title("🔓 Ingreso Seguro")
+    st.title("🔓 Ingreso")
     t_log = st.text_input("Teléfono")
     p_log = st.text_input("Contraseña", type="password")
     if st.button("Entrar"):
@@ -76,39 +66,43 @@ elif st.session_state.pagina == "Login":
         else: st.error("Datos incorrectos.")
     if st.button("⬅️ Volver"): st.session_state.pagina = "Bienvenida"; st.rerun()
 
-# --- 3. REGISTRO ---
 elif st.session_state.pagina == "Registro":
     st.title("📝 Registro de Usuario")
     c1, c2 = st.columns(2)
     with c1:
-        r_tel = st.text_input("Teléfono (ID)")
+        r_tel = st.text_input("Número Telefónico")
         r_nom = st.text_input("Nombre Completo")
         r_pw = st.text_input("Contraseña", type="password")
-        r_eme = st.text_input("Emergencia S.O.S")
+        r_eme = st.text_input("Contacto Emergencia")
     with c2:
         r_rol = st.selectbox("Rol", ["Cliente", "Prestador"])
-        r_tipo_v = st.selectbox("Clase Vehículo", ["Automóvil", "Van", "SUV (4x4)", "Buseta"])
-        r_desc_v = st.text_input("Modelo/Color")
+        r_tipo_v = st.selectbox("Clase de Vehículo", ["Automóvil", "Van", "SUV (4x4)", "Buseta"])
+        r_desc_v = st.text_input("Modelo y Color")
         r_pla = st.text_input("Placa")
         r_foto = st.camera_input("Foto de Rostro")
     
     if st.button("✅ Finalizar Registro"):
-        if r_foto and r_tel:
+        if r_foto and r_tel and r_nom:
             conn = conectar_db()
             c = conn.cursor()
-            c.execute("INSERT INTO usuarios VALUES (?,?,?,?,?,?,?,?)", 
-                      (r_tel, r_nom, r_pw, r_eme, r_rol, r_tipo_v, r_desc_v, r_pla, r_foto.getvalue()))
-            conn.commit(); conn.close()
-            st.success("¡Registro Exitoso!"); st.session_state.pagina = "Login"; st.rerun()
-    if st.button("⬅️ Volver"): st.session_state.pagina = "Bienvenida"; st.rerun()
+            try:
+                c.execute("INSERT INTO usuarios VALUES (?,?,?,?,?,?,?,?,?)", 
+                          (r_tel, r_nom, r_pw, r_eme, r_rol, r_tipo_v, r_desc_v, r_pla, r_foto.getvalue()))
+                conn.commit()
+                st.success("¡Registrado!"); st.session_state.pagina = "Login"; st.rerun()
+            except: st.error("Error al registrar.")
+            finally: conn.close()
 
-# --- 4. PANEL DE CONTROL ---
+# --- PANEL DE CONTROL (AJUSTADO) ---
 elif st.session_state.pagina == "Panel":
-    u = st.session_state.user
-    st.sidebar.image(u[8] if len(u)>8 else u[7], width=100)
-    st.sidebar.title(f"Hola, {u[1]}")
+    u = st.session_state.user # 0:tel, 1:nom, 4:rol, 5:tipo_v, 6:desc, 7:placa, 8:foto
     
-    menu = st.sidebar.radio("Menú Principal", ["📍 Gestión de Rutas", "💬 Chat", "🚨 S.O.S"])
+    # PERFIL PRIVADO (Oculta teléfono y dirección)
+    st.sidebar.image(u[8], width=100)
+    st.sidebar.markdown(f"### {u[1]}")
+    st.sidebar.info(f"🎭 Rol: {u[4]}")
+    
+    menu = st.sidebar.radio("Menú", ["📍 Gestión de Rutas", "💬 Chat", "🚨 S.O.S"])
 
     if menu == "📍 Gestión de Rutas":
         if u[4] == "Prestador":
@@ -116,55 +110,45 @@ elif st.session_state.pagina == "Panel":
             with st.form("ruta_form"):
                 col1, col2 = st.columns(2)
                 with col1:
-                    dep_o = st.selectbox("Dpto. Origen", list(DEPARTAMENTOS_COSTA.keys()))
-                    mun_o = st.selectbox("Ciudad Origen", DEPARTAMENTOS_COSTA[dep_o])
+                    d_o = st.selectbox("Dpto. Origen", list(DEPARTAMENTOS_COSTA.keys()))
+                    m_o = st.selectbox("Ciudad Origen", DEPARTAMENTOS_COSTA[d_o])
                 with col2:
-                    dep_d = st.selectbox("Dpto. Destino", list(DEPARTAMENTOS_COSTA.keys()))
-                    mun_d = st.selectbox("Ciudad Destino", DEPARTAMENTOS_COSTA[dep_d])
+                    d_d = st.selectbox("Dpto. Destino", list(DEPARTAMENTOS_COSTA.keys()))
+                    m_d = st.selectbox("Ciudad Destino", DEPARTAMENTOS_COSTA[d_d])
                 
-                c_hora = st.time_input("Hora Salida")
-                c_cupos = st.number_input("Cupos Disponibles", 1, 20, 4)
-                c_precio = st.text_input("Precio por Cupo", "25.000")
+                h = st.time_input("Hora de Salida")
+                cupos = st.number_input("Cupos Disponibles", 1, 20, 4)
+                precio = st.text_input("Precio Sugerido", "25.000")
                 
-                if st.form_submit_button("🚀 PUBLICAR"):
+                if st.form_submit_button("🚀 PUBLICAR RUTA"):
                     conn = conectar_db()
                     c = conn.cursor()
-                    c.execute("INSERT INTO rutas (tel_p, cond, veh_tipo, veh_desc, pla, ori, des, hora, cupos, precio) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                              (u[0], u[1], u[5], u[6], u[7], mun_o, mun_d, str(c_hora), c_cupos, c_precio))
+                    # CORRECCIÓN: 10 parámetros coincidiendo con la tabla
+                    c.execute("""INSERT INTO rutas 
+                                (tel_p, cond, veh_tipo, veh_desc, pla, ori, des, hora, cupos, precio) 
+                                VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                              (u[0], u[1], u[5], u[6], u[7], m_o, m_d, str(h), cupos, precio))
                     conn.commit(); conn.close()
-                    st.success("Ruta activa.")
+                    st.success("¡Ruta Guardada!")
 
         else: # CLIENTE
-            st.header("🔍 Buscar Transporte")
-            col_a, col_b = st.columns(2)
-            with col_a: b_ori = st.selectbox("Desde", ["Todos"] + [m for d in DEPARTAMENTOS_COSTA.values() for m in d])
-            with col_b: b_des = st.selectbox("Hacia", ["Todos"] + [m for d in DEPARTAMENTOS_COSTA.values() for m in d])
-            
+            st.header("🔍 Rutas Disponibles")
             conn = conectar_db()
-            query = "SELECT * FROM rutas WHERE estado='Activa' AND cupos > 0"
-            if b_ori != "Todos": query += f" AND ori='{b_ori}'"
-            if b_des != "Todos": query += f" AND des='{b_des}'"
-            df_rutas = pd.read_sql(query, conn)
-
-            if not df_rutas.empty:
-                for index, row in df_rutas.iterrows():
-                    # --- NOTIFICACIÓN DE URGENCIA ---
-                    urgencia = "🔥 ¡ÚLTIMO CUPO!" if row['cupos'] == 1 else f"👥 {row['cupos']} Cupos"
-                    
-                    with st.expander(f"🚗 {row['cond']} | {row['ori']} ➔ {row['des']} | {urgencia}"):
-                        if row['cupos'] == 1:
-                            st.warning("⚠️ Esta ruta está a punto de completarse. ¡Reserva ya!")
-                        
-                        st.write(f"**Vehículo:** {row['veh_tipo']} ({row['veh_desc']}) | **Placa:** {row['pla']}")
-                        st.write(f"**Precio:** ${row['precio']} | **Hora:** {row['hora']}")
-                        
-                        if st.button(f"Confirmar mi Cupo", key=row['id']):
-                            c = conn.cursor()
-                            c.execute("UPDATE rutas SET cupos = cupos - 1 WHERE id=?", (row['id'],))
-                            conn.commit()
-                            st.success("¡Reserva confirmada automáticamente!"); st.rerun()
-            else: st.warning("No hay rutas activas para esta búsqueda.")
+            df = pd.read_sql("SELECT * FROM rutas WHERE cupos > 0 AND estado='Activa'", conn)
             conn.close()
+            
+            if not df.empty:
+                for idx, r in df.iterrows():
+                    urgencia = "🔥 ¡ÚLTIMO CUPO!" if r['cupos'] == 1 else f"👥 {r['cupos']} Cupos"
+                    with st.expander(f"🚗 {r['cond']} | {r['ori']} ➔ {r['des']} | {urgencia}"):
+                        st.write(f"**Vehículo:** {r['veh_tipo']} ({r['veh_desc']}) | **Placa:** {r['pla']}")
+                        st.write(f"**Precio:** ${r['precio']} | **Hora:** {r['hora']}")
+                        if st.button(f"Reservar Cupo", key=r['id']):
+                            conn = conectar_db(); c = conn.cursor()
+                            c.execute("UPDATE rutas SET cupos = cupos - 1 WHERE id=?", (r['id'],))
+                            conn.commit(); conn.close()
+                            st.success("Cupo reservado automáticamente."); st.rerun()
+            else: st.warning("No hay rutas activas.")
 
     if st.sidebar.button("Cerrar Sesión"):
         st.session_state.user = None; st.session_state.pagina = "Bienvenida"; st.rerun()
