@@ -1,79 +1,109 @@
 import streamlit as st
 import sqlite3
+import pandas as pd
 from datetime import datetime
 
-# --- CONFIGURACIÓN DE BASE DE DATOS ---
+# --- CONFIGURACIÓN DE PÁGINA ---
+st.set_page_config(page_title="Caribe Seguro PRO", layout="wide", page_icon="🛡️")
+
+# --- BASE DE DATOS LOCAL ---
 def init_db():
-    conn = sqlite3.connect('caribe_elite.db')
+    conn = sqlite3.connect('caribe_data.db')
     c = conn.cursor()
     c.execute('''CREATE TABLE IF NOT EXISTS usuarios 
-                 (telefono TEXT PRIMARY KEY, nombre TEXT, password TEXT, emergencia TEXT, 
-                  rol TEXT, vehiculo TEXT, placa TEXT, foto BLOB, estrellas REAL DEFAULT 5.0)''')
+                 (tel TEXT PRIMARY KEY, nom TEXT, pw TEXT, eme TEXT, rol TEXT, veh TEXT, pla TEXT, foto BLOB)''')
     c.execute('''CREATE TABLE IF NOT EXISTS rutas 
-                 (id INTEGER PRIMARY KEY AUTO_INCREMENT, tel_p TEXT, conductor TEXT,
-                  origen TEXT, destino TEXT, hora TEXT, cupos INTEGER, estado TEXT DEFAULT 'Activo')''')
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, tel_p TEXT, conductor TEXT, ori TEXT, des TEXT, cupos INTEGER, estado TEXT)''')
     conn.commit()
     conn.close()
 
 init_db()
 
-# --- LÓGICA DE NAVEGACIÓN ---
+# --- ESTADO DE SESIÓN ---
 if 'user' not in st.session_state: st.session_state.user = None
 if 'pagina' not in st.session_state: st.session_state.pagina = "Bienvenida"
 
-# --- 1. BIENVENIDA CON MENÚ LEGAL ---
-if st.session_state.pagina == "Bienvenida" and st.session_state.user is None:
-    st.title("🛡️ Caribe Seguro PRO")
-    st.subheader("Transporte Confiable y Verificado")
+# --- PANTALLA DE BIENVENIDA ---
+if st.session_state.pagina == "Bienvenida":
+    st.title("🌴 Bienvenido a Caribe Seguro")
+    st.subheader("La red de transporte verificado de la Costa")
     
-    col_a, col_b = st.columns(2)
-    with col_a:
-        if st.button("🔑 Iniciar Sesión", use_container_width=True): st.session_state.pagina = "Login"; st.rerun()
-    with col_b:
-        if st.button("📝 Registrarse", use_container_width=True): st.session_state.pagina = "Registro"; st.rerun()
-
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🔑 INICIAR SESIÓN", use_container_width=True):
+            st.session_state.pagina = "Login"; st.rerun()
+    with col2:
+        if st.button("📝 REGISTRARME", use_container_width=True):
+            st.session_state.pagina = "Registro"; st.rerun()
+    
     st.divider()
-    col_l1, col_l2 = st.columns(2)
-    with col_l1:
-        with st.expander("📄 Términos y Condiciones"):
-            st.write("**1. Naturaleza:** Esta plataforma es un intermediario tecnológico.")
-            st.write("**2. Seguridad:** Es obligatorio el registro con foto real y cédula.")
-            st.write("**3. Pagos:** Los pagos digitales se procesan vía Nequi/Daviplata.")
-            st.write("**4. Jurisdicción:** Sujeto a las leyes comerciales de Colombia.")
-    with col_l2:
-        with st.expander("📖 Manual de Usuario"):
-            st.write("**Para Conductores:** Sube foto de placa y rostro. Finaliza el viaje para recibir el pago.")
-            st.write("**Para Pasajeros:** Verifica la placa antes de subir. Usa el botón S.O.S si es necesario.")
+    with st.expander("📄 Términos, Condiciones y Manual"):
+        st.write("**Manual:** Conductores deben subir placa. Clientes deben verificar identidad.")
+        st.write("**Legal:** Esta App es un intermediario de confianza.")
 
-# --- 2. FINALIZACIÓN Y CALIFICACIÓN (LOGUEADO) ---
-elif st.session_state.user:
+# --- PANTALLA DE LOGIN ---
+elif st.session_state.pagina == "Login":
+    st.title("🔓 Ingreso Seguro")
+    t_log = st.text_input("Teléfono")
+    p_log = st.text_input("Contraseña", type="password")
+    if st.button("Entrar"):
+        conn = sqlite3.connect('caribe_data.db')
+        c = conn.cursor()
+        c.execute("SELECT * FROM usuarios WHERE tel=? AND pw=?", (t_log, p_log))
+        res = c.fetchone()
+        conn.close()
+        if res:
+            st.session_state.user = res
+            st.session_state.pagina = "Panel"; st.rerun()
+        else: st.error("Datos no coinciden.")
+    if st.button("⬅️ Volver"): st.session_state.pagina = "Bienvenida"; st.rerun()
+
+# --- PANTALLA DE REGISTRO ---
+elif st.session_state.pagina == "Registro":
+    st.title("📝 Registro Nuevo Usuario")
+    c1, c2 = st.columns(2)
+    with c1:
+        r_tel = st.text_input("Teléfono Móvil")
+        r_nom = st.text_input("Nombre Completo")
+        r_pw = st.text_input("Contraseña", type="password")
+        r_eme = st.text_input("Contacto de Emergencia")
+    with c2:
+        r_rol = st.selectbox("Rol", ["Cliente", "Prestador"])
+        r_veh = st.text_input("Vehículo (Marca/Color)")
+        r_pla = st.text_input("Placa")
+        r_foto = st.camera_input("Foto de Rostro Obligatoria")
+    
+    if st.button("Finalizar Registro"):
+        if r_foto and r_tel:
+            conn = sqlite3.connect('caribe_data.db')
+            c = conn.cursor()
+            try:
+                c.execute("INSERT INTO usuarios VALUES (?,?,?,?,?,?,?,?)", 
+                          (r_tel, r_nom, r_pw, r_eme, r_rol, r_veh, r_pla, r_foto.getvalue()))
+                conn.commit()
+                st.success("¡Registro exitoso! Ve a Iniciar Sesión.")
+            except: st.error("El teléfono ya existe.")
+            conn.close()
+
+# --- PANEL PRINCIPAL ---
+elif st.session_state.pagina == "Panel":
     u = st.session_state.user
-    menu = st.sidebar.radio("Navegación", ["📍 Rutas", "📜 Historial de Viajes", "⭐ Calificaciones"])
-
-    if u[4] == "Prestador" and menu == "📍 Rutas":
-        st.header("Gestionar mis Viajes en Curso")
-        # Simulación de un viaje activo
-        with st.container():
-            st.info("🚗 Viaje en curso: Sabanalarga ➔ Barranquilla (3 pasajeros)")
-            if st.button("🏁 FINALIZAR VIAJE Y COBRAR"):
-                st.success("Viaje finalizado. ¡Por favor califica a tus pasajeros!")
-                st.session_state.calificar = True
-
-        if st.session_state.get('calificar'):
-            st.subheader("Califica a tus Pasajeros")
-            puntos = st.select_slider("¿Cómo fue el comportamiento?", options=[1,2,3,4,5], value=5)
-            if st.button("Enviar Calificación"):
-                st.write("¡Gracias! Tu reputación como conductor ha subido.")
-                st.session_state.calificar = False
-
-    elif u[4] == "Cliente" and menu == "📜 Historial de Viajes":
-        st.header("Tus Viajes Recientes")
-        with st.expander("✅ Viaje Finalizado: Barranquilla ➔ Cartagena"):
-            st.write("Conductor: Juan Pérez (Placa: KLO-987)")
-            st.write("¿Cómo estuvo el servicio?")
-            estrellas = st.feedback("stars")
-            if estrellas is not None:
-                st.success(f"Has calificado con {estrellas + 1} estrellas. ¡Gracias por mejorar la comunidad!")
+    st.sidebar.image(u[7], width=100)
+    st.sidebar.write(f"**{u[1]}**")
+    
+    if st.sidebar.button("🚨 S.O.S (ALERTA)", type="primary"):
+        st.error(f"Alerta enviada a emergencia: {u[3]}")
+    
+    opcion = st.sidebar.radio("Menú", ["📍 Viajes", "💬 Chat", "💳 Pagos", "📜 Historial"])
+    
+    if opcion == "📍 Viajes":
+        st.header("Rutas en la Costa")
+        if u[4] == "Prestador":
+            st.subheader("Publicar Ruta")
+            # Aquí va el formulario de origen/destino
+        else:
+            st.subheader("Buscar Conductor")
+            # Aquí va el buscador
 
     if st.sidebar.button("Cerrar Sesión"):
         st.session_state.user = None
